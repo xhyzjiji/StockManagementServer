@@ -3,8 +3,8 @@
 import { http, qs } from './http';
 import type {
   AttrDefDraft, AttributeDef, AuthConfig, Category, DeletedRow, ImportMode, ImportPreview, ImportResult,
-  ItemDetail, ItemInput, ItemQuery, ItemSummary, Page, PricePoint, StockInput, StockRecord, TagSlice, User,
-  Warehouse, WarehouseStats,
+  ItemDetail, ItemInput, ItemQuery, ItemSummary, MaterialPick, Page, PricePoint, StockInput, StockRecord,
+  TagSlice, User, Warehouse, WarehouseStats, Work, WorkBatchInput, WorkDetail, WorkInput,
 } from './types';
 
 type Ok = { ok: boolean };
@@ -74,4 +74,20 @@ export const itemApi = {
 
 export const uploadApi = {
   image: (file: Blob) => http.upload<{ path: string; url: string }>('/api/uploads/image', file, 'image.jpg'),
+};
+
+export const workApi = {
+  list: () => http.get<Work[]>('/api/works'),
+  get: (id: number) => http.get<WorkDetail>(`/api/works/${id}`),
+  create: (input: WorkInput) => http.post<Created>('/api/works', input),
+  update: (id: number, name: string, remark: string) => http.put<Ok>(`/api/works/${id}`, { name, remark }),
+  remove: (id: number) => http.del<Ok>(`/api/works/${id}`),
+  appendBatch: (id: number, input: WorkBatchInput) => http.post<Ok>(`/api/works/${id}/batches`, input),
+};
+
+export const materialApi = {
+  // 必须先指定仓库；搜索只在该仓库内进行
+  // warehouse_id is required; search is scoped to that warehouse.
+  list: (warehouseId: number, q = '') =>
+    http.get<MaterialPick[]>('/api/materials' + qs({ warehouse_id: warehouseId, q })),
 };

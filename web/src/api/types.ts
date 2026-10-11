@@ -176,3 +176,89 @@ export interface ItemQuery {
   by?: 'name' | 'tag';
   sort?: '' | 'days_desc' | 'days_asc';
 }
+
+// ---------------- 作品 / Works ----------------
+
+export interface Work {
+  id: number;
+  name: string;
+  remark: string;
+  quantity: number;
+  total_minutes: number;
+  avg_minutes: number;
+  material_cost: number;
+  unit_material_cost: number;
+  cover_image: string;
+  created_at: number;
+}
+
+export interface WorkImage {
+  id: number;
+  path: string;
+  sort_order: number;
+  is_cover: boolean;
+}
+
+export interface WorkMaterial {
+  id: number;
+  item_id: number;
+  warehouse_id: number;
+  warehouse_name: string;
+  item_name: string;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  line_cost: number;
+}
+
+export interface WorkBatch {
+  id: number;
+  quantity: number;
+  minutes: number;
+  note: string;
+  created_at: number;
+}
+
+export interface WorkDetail {
+  work: Work;
+  images: WorkImage[];
+  materials: WorkMaterial[];
+  batches: WorkBatch[];
+}
+
+export interface WorkImageInput {
+  staged_image: string;
+  is_cover: boolean;
+}
+
+export interface WorkMaterialInput {
+  item_id: number;
+  quantity: number;
+}
+
+export interface WorkInput {
+  name: string;
+  remark: string;
+  images: WorkImageInput[];
+  materials: WorkMaterialInput[];
+  quantity: number;
+  minutes: number;
+  note: string;
+}
+
+export interface WorkBatchInput {
+  quantity: number;
+  minutes: number;
+  note: string;
+}
+
+export interface MaterialPick {
+  item_id: number;
+  item_name: string;
+  unit: string;
+  quantity: number;
+  avg_price: number;
+  warehouse_id: number;
+  warehouse_name: string;
+  first_image: string;
+}

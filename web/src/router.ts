@@ -13,7 +13,12 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
-    { path: '/', name: 'warehouses', component: () => import('@/views/WarehousesView.vue') },
+    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
+    { path: '/warehouses', name: 'warehouses', component: () => import('@/views/WarehousesView.vue') },
+    { path: '/works', name: 'works', component: () => import('@/views/WorksView.vue') },
+    { path: '/works/new', name: 'work-new', component: () => import('@/views/WorkCreateView.vue') },
+    { path: '/works/:id(\\d+)', name: 'work', component: () => import('@/views/WorkDetailView.vue') },
+    { path: '/inspiration', name: 'inspiration', component: () => import('@/views/InspirationView.vue') },
     { path: '/bin', name: 'warehouse-bin', component: () => import('@/views/WarehouseBinView.vue') },
     { path: '/w/:id(\\d+)', name: 'overview', component: () => import('@/views/OverviewView.vue') },
     { path: '/w/:id(\\d+)/attrs', name: 'attrs', component: () => import('@/views/AttrsView.vue') },

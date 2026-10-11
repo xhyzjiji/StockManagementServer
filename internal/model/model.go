@@ -213,3 +213,103 @@ type StockInput struct {
 	CorrectedValue *float64  `json:"corrected_value"`
 	OccurredAt     *int64    `json:"occurred_at"`
 }
+
+// ---------------- 作品 / Works ----------------
+
+// Work 作品列表行。
+// Work is a list row for a finished piece.
+type Work struct {
+	ID               int64   `json:"id"`
+	Name             string  `json:"name"`
+	Remark           string  `json:"remark"`
+	Quantity         float64 `json:"quantity"`
+	TotalMinutes     float64 `json:"total_minutes"`
+	AvgMinutes       float64 `json:"avg_minutes"`
+	MaterialCost     float64 `json:"material_cost"`
+	UnitMaterialCost float64 `json:"unit_material_cost"`
+	CoverImage       string  `json:"cover_image"`
+	CreatedAt        int64   `json:"created_at"`
+}
+
+type WorkImage struct {
+	ID        int64  `json:"id"`
+	Path      string `json:"path"`
+	SortOrder int    `json:"sort_order"`
+	IsCover   bool   `json:"is_cover"`
+}
+
+// WorkMaterial 创建时锁定的材料用量与均价快照。
+// WorkMaterial is a material usage and average-price snapshot locked at creation.
+type WorkMaterial struct {
+	ID            int64   `json:"id"`
+	ItemID        int64   `json:"item_id"`
+	WarehouseID   int64   `json:"warehouse_id"`
+	WarehouseName string  `json:"warehouse_name"`
+	ItemName      string  `json:"item_name"`
+	Unit          string  `json:"unit"`
+	Quantity      float64 `json:"quantity"`
+	UnitPrice     float64 `json:"unit_price"`
+	LineCost      float64 `json:"line_cost"`
+}
+
+type WorkBatch struct {
+	ID        int64   `json:"id"`
+	Quantity  float64 `json:"quantity"`
+	Minutes   float64 `json:"minutes"`
+	Note      string  `json:"note"`
+	CreatedAt int64   `json:"created_at"`
+}
+
+type WorkDetail struct {
+	Work      Work           `json:"work"`
+	Images    []WorkImage    `json:"images"`
+	Materials []WorkMaterial `json:"materials"`
+	Batches   []WorkBatch    `json:"batches"`
+}
+
+// WorkImageInput 创建作品时提交的图片：staged_image 为 tmp 暂存路径；is_cover 指定封面。
+// WorkImageInput is an image on create: staged_image is a tmp path; is_cover picks the thumbnail.
+type WorkImageInput struct {
+	StagedImage string `json:"staged_image"`
+	IsCover     bool   `json:"is_cover"`
+}
+
+// WorkMaterialInput 创建时选中的材料与用量；单价由服务端按当前均价锁定。
+// WorkMaterialInput is a selected material and usage; unit price is locked by the server from current avg.
+type WorkMaterialInput struct {
+	ItemID   int64   `json:"item_id"`
+	Quantity float64 `json:"quantity"`
+}
+
+// WorkInput 多步录入最终提交的内容：图片、材料用量、本批数量与制作用时。
+// WorkInput is the final create payload: images, material usages, batch quantity and production time.
+type WorkInput struct {
+	Name      string              `json:"name"`
+	Remark    string              `json:"remark"`
+	Images    []WorkImageInput    `json:"images"`
+	Materials []WorkMaterialInput `json:"materials"`
+	Quantity  float64             `json:"quantity"`
+	Minutes   float64             `json:"minutes"`
+	Note      string              `json:"note"`
+}
+
+// WorkBatchInput 追加数量与用时。
+// WorkBatchInput appends quantity and production time.
+type WorkBatchInput struct {
+	Quantity float64 `json:"quantity"`
+	Minutes  float64 `json:"minutes"`
+	Note     string  `json:"note"`
+}
+
+// MaterialPick 跨仓库选材料用的物品行。
+// MaterialPick is an item row for cross-warehouse material picking.
+type MaterialPick struct {
+	ItemID        int64   `json:"item_id"`
+	ItemName      string  `json:"item_name"`
+	Unit          string  `json:"unit"`
+	Quantity      float64 `json:"quantity"`
+	AvgPrice      float64 `json:"avg_price"`
+	WarehouseID   int64   `json:"warehouse_id"`
+	WarehouseName string  `json:"warehouse_name"`
+	FirstImage    string  `json:"first_image"`
+}

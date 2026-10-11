@@ -16,7 +16,7 @@ const destroy = async (r: DeletedRow) => { await warehouseApi.destroy(r.id); awa
 </script>
 
 <template>
-  <PageLayout title="仓库回收站" back="/">
+  <PageLayout title="仓库回收站" back="/warehouses">
     <LoadState :loading="loading">
       <RecycleList :rows="rows ?? []" :destroy-message="destroyMessage" :on-restore="restore" :on-destroy="destroy" />
     </LoadState>

@@ -20,6 +20,17 @@ export function fmtMoney(v: number): string {
   return (Math.round(n * 100 + (n >= 0 ? 1e-7 : -1e-7)) / 100).toFixed(2);
 }
 
+// fmtMinutes 把分钟数格式化为「Xh Ym」或「Ym」。
+// fmtMinutes formats minutes as "Xh Ym" or "Ym".
+export function fmtMinutes(mins: number): string {
+  const n = Math.max(0, Number(mins) || 0);
+  const h = Math.floor(n / 60);
+  const m = Math.round(n - h * 60);
+  if (h <= 0) return `${fmtQty(m)} 分钟`;
+  if (m <= 0) return `${h} 小时`;
+  return `${h} 小时 ${m} 分钟`;
+}
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 export function fmtTime(ms: number): string {

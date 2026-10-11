@@ -87,8 +87,10 @@ func (s *Server) handleUploadImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"path": rel, "url": "/files/" + rel})
 }
 
-// handleFile 校验归属后返回图片：items/{itemId}/... 需物品属于当前用户，tmp/{userId}/... 需为本人暂存。
-// handleFile serves an image after an ownership check: items/{itemId}/... must be the user's item, tmp/{userId}/... the user's own staging.
+// handleFile 校验归属后返回图片：
+// items/{itemId}/...、works/{workId}/... 需属于当前用户；tmp/{userId}/... 需为本人暂存。
+// handleFile serves an image after an ownership check:
+// items/{itemId}/... and works/{workId}/... must belong to the user; tmp/{userId}/... must be their staging.
 func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	rel := r.PathValue("path")
 	parts := strings.Split(rel, "/")
@@ -105,6 +107,11 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	switch parts[0] {
 	case "items":
 		if !s.store.UserOwnsItemFiles(r.Context(), uid(r), owner) {
+			http.NotFound(w, r)
+			return
+		}
+	case "works":
+		if !s.store.UserOwnsWorkFiles(r.Context(), uid(r), owner) {
 			http.NotFound(w, r)
 			return
 		}

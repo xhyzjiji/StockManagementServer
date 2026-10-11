@@ -3,14 +3,16 @@
 // 目录结构：
 //
 //	items/{itemId}/{defId}/{name}.jpg   物品属性图片，随物品/属性删除按目录级联清理
-//	tmp/{userId}/{name}                 上传暂存区（图片、导入数据包），保存物品后转正，定期清理
+//	works/{workId}/{name}.jpg           作品图片，随作品删除按目录清理
+//	tmp/{userId}/{name}                 上传暂存区（图片、导入数据包），保存后转正，定期清理
 //
 // Package imagestore manages image files on local disk; the database only stores paths relative to Root.
 //
 // Layout:
 //
 //	items/{itemId}/{defId}/{name}.jpg   item attribute images, removed per directory with the item/attribute
-//	tmp/{userId}/{name}                 upload staging (images, import packages), promoted on item save, swept periodically
+//	works/{workId}/{name}.jpg           work images, removed per directory with the work
+//	tmp/{userId}/{name}                 upload staging (images, import packages), promoted on save, swept periodically
 package imagestore
 
 import (
@@ -47,6 +49,9 @@ func New(root string) (*Store, error) {
 		return nil, err
 	}
 	if err := os.MkdirAll(filepath.Join(abs, "items"), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Join(abs, "works"), 0o755); err != nil {
 		return nil, err
 	}
 	return &Store{Root: abs}, nil
@@ -171,6 +176,34 @@ func (s *Store) Delete(rel string) {
 
 func (s *Store) DeleteItemImages(itemID int64) {
 	os.RemoveAll(filepath.Join(s.Root, "items", strconv.FormatInt(itemID, 10)))
+}
+
+// CommitWork 把暂存图片转正到 works/{workId}/ 下并返回新的相对路径。
+// CommitWork promotes a staged image into works/{workId}/ and returns the new relative path.
+func (s *Store) CommitWork(userID, workID int64, stagedRel string) (string, error) {
+	if !s.IsUserTmp(userID, stagedRel) {
+		return "", ErrBadPath
+	}
+	src, err := s.Abs(stagedRel)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(src); err != nil {
+		return "", model.Invalid("暂存图片不存在或已过期，请重新上传")
+	}
+	rel := fmt.Sprintf("works/%d/%s", workID, path.Base(stagedRel))
+	dst, _ := s.Abs(rel)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.Rename(src, dst); err != nil {
+		return "", err
+	}
+	return rel, nil
+}
+
+func (s *Store) DeleteWorkImages(workID int64) {
+	os.RemoveAll(filepath.Join(s.Root, "works", strconv.FormatInt(workID, 10)))
 }
 
 func (s *Store) DeleteAttrDir(itemID, defID int64) {

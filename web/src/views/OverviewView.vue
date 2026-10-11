@@ -199,7 +199,7 @@ async function onStockDone() {
 </script>
 
 <template>
-  <PageLayout :title="wh?.name ?? '仓库'" :subtitle="wh?.remark || undefined" back="/">
+  <PageLayout :title="wh?.name ?? '仓库'" :subtitle="wh?.remark || undefined" back="/warehouses">
     <template #actions>
       <van-icon name="bar-chart-o" title="数据统计" @click="router.push(`/w/${whID}/stats`)" />
       <MoreMenu :items="menu" />

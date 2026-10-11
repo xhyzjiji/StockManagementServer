@@ -95,6 +95,14 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/warehouses/{id}/stats", a(s.handleStats))
 	mux.Handle("GET /api/warehouses/{id}/stats/tags", a(s.handleTagStats))
 
+	mux.Handle("GET /api/works", a(s.handleListWorks))
+	mux.Handle("POST /api/works", a(s.handleCreateWork))
+	mux.Handle("GET /api/works/{id}", a(s.handleGetWork))
+	mux.Handle("PUT /api/works/{id}", a(s.handleUpdateWork))
+	mux.Handle("DELETE /api/works/{id}", a(s.handleDeleteWork))
+	mux.Handle("POST /api/works/{id}/batches", a(s.handleAppendWorkBatch))
+	mux.Handle("GET /api/materials", a(s.handleListMaterials))
+
 	mux.Handle("POST /api/uploads/image", a(s.handleUploadImage))
 	mux.Handle("GET /files/{path...}", a(s.handleFile))
 
