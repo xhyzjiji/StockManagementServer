@@ -178,6 +178,13 @@ func (s *Store) DeleteItemImages(itemID int64) {
 	os.RemoveAll(filepath.Join(s.Root, "items", strconv.FormatInt(itemID, 10)))
 }
 
+// IsWorkFile 判断相对路径是否为该作品目录下的合法文件名。
+// IsWorkFile reports whether rel is a safe file under works/{workId}/.
+func (s *Store) IsWorkFile(workID int64, rel string) bool {
+	prefix := fmt.Sprintf("works/%d/", workID)
+	return strings.HasPrefix(rel, prefix) && safeFileName.MatchString(strings.TrimPrefix(rel, prefix))
+}
+
 // CommitWork 把暂存图片转正到 works/{workId}/ 下并返回新的相对路径。
 // CommitWork promotes a staged image into works/{workId}/ and returns the new relative path.
 func (s *Store) CommitWork(userID, workID int64, stagedRel string) (string, error) {

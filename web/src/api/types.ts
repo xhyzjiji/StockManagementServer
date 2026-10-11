@@ -227,7 +227,10 @@ export interface WorkDetail {
 }
 
 export interface WorkImageInput {
-  staged_image: string;
+  /** 编辑时保留已有图 / keep existing image on edit */
+  path?: string;
+  /** 新上传暂存路径 / newly uploaded staged path */
+  staged_image?: string;
   is_cover: boolean;
 }
 
@@ -244,6 +247,13 @@ export interface WorkInput {
   quantity: number;
   minutes: number;
   note: string;
+}
+
+export interface WorkUpdateInput {
+  name: string;
+  remark: string;
+  images: WorkImageInput[];
+  materials: WorkMaterialInput[];
 }
 
 export interface WorkBatchInput {

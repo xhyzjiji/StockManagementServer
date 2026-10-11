@@ -18,6 +18,7 @@ const { data: list, loading, reload } = usePageData(() => workApi.list());
 
 function cardMenu(w: Work): MenuItem[] {
   return [
+    { text: '编辑', onClick: () => router.push(`/works/${w.id}/edit`) },
     { text: '追加数量', onClick: () => router.push(`/works/${w.id}?append=1`) },
     {
       text: '删除', danger: true, onClick: async () => {

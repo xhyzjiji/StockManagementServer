@@ -27,7 +27,7 @@ const active = computed(() => {
   const n = String(route.name ?? '');
   if (n === 'home') return 'home';
   if (n === 'warehouses' || n === 'warehouse-bin') return 'warehouses';
-  if (n === 'works' || n === 'work' || n === 'work-new') return 'works';
+  if (n === 'works' || n === 'work' || n === 'work-new' || n === 'work-edit') return 'works';
   if (n === 'inspiration') return 'inspiration';
   return '';
 });

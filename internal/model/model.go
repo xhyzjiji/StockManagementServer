@@ -267,14 +267,15 @@ type WorkDetail struct {
 	Batches   []WorkBatch    `json:"batches"`
 }
 
-// WorkImageInput 创建作品时提交的图片：staged_image 为 tmp 暂存路径；is_cover 指定封面。
-// WorkImageInput is an image on create: staged_image is a tmp path; is_cover picks the thumbnail.
+// WorkImageInput 作品图片：创建时用 staged_image（tmp）；编辑时可用 path 保留已有图，或 staged_image 新增。
+// WorkImageInput: on create use staged_image (tmp); on edit keep via path or add via staged_image.
 type WorkImageInput struct {
+	Path        string `json:"path"`
 	StagedImage string `json:"staged_image"`
 	IsCover     bool   `json:"is_cover"`
 }
 
-// WorkMaterialInput 创建时选中的材料与用量；单价由服务端按当前均价锁定。
+// WorkMaterialInput 创建/编辑时选中的材料与用量；单价由服务端按当前均价锁定。
 // WorkMaterialInput is a selected material and usage; unit price is locked by the server from current avg.
 type WorkMaterialInput struct {
 	ItemID   int64   `json:"item_id"`
@@ -291,6 +292,15 @@ type WorkInput struct {
 	Quantity  float64             `json:"quantity"`
 	Minutes   float64             `json:"minutes"`
 	Note      string              `json:"note"`
+}
+
+// WorkUpdateInput 编辑作品：名称、备注、图片与材料用量；不改累计数量/用时（仍用追加品次）。
+// WorkUpdateInput edits name, remark, images and material usages; quantity/time stay via batch append.
+type WorkUpdateInput struct {
+	Name      string              `json:"name"`
+	Remark    string              `json:"remark"`
+	Images    []WorkImageInput    `json:"images"`
+	Materials []WorkMaterialInput `json:"materials"`
 }
 
 // WorkBatchInput 追加数量与用时。

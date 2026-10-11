@@ -4,12 +4,22 @@
 import type { RouteLocationRaw } from 'vue-router';
 import { useRouter } from 'vue-router';
 
-const props = defineProps<{ title: string; subtitle?: string; back?: RouteLocationRaw }>();
+const props = defineProps<{
+  title: string;
+  subtitle?: string;
+  back?: RouteLocationRaw;
+  /** 自定义返回（如向导回退上一步）；提供时覆盖默认 history/fallback。 / Custom back (e.g. wizard prev step); overrides default. */
+  backAction?: () => void;
+}>();
 const router = useRouter();
 
 // 有站内历史时后退（保留上一页的筛选与滚动），否则跳到兜底页
 // Go back when there is in-app history (keeping the previous page state), otherwise go to the fallback.
 function goBack() {
+  if (props.backAction) {
+    props.backAction();
+    return;
+  }
   if (window.history.state?.back) router.back();
   else if (props.back) router.replace(props.back);
 }

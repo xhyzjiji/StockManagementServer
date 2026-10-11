@@ -17,6 +17,7 @@ export const router = createRouter({
     { path: '/warehouses', name: 'warehouses', component: () => import('@/views/WarehousesView.vue') },
     { path: '/works', name: 'works', component: () => import('@/views/WorksView.vue') },
     { path: '/works/new', name: 'work-new', component: () => import('@/views/WorkCreateView.vue') },
+    { path: '/works/:id(\\d+)/edit', name: 'work-edit', component: () => import('@/views/WorkCreateView.vue') },
     { path: '/works/:id(\\d+)', name: 'work', component: () => import('@/views/WorkDetailView.vue') },
     { path: '/inspiration', name: 'inspiration', component: () => import('@/views/InspirationView.vue') },
     { path: '/bin', name: 'warehouse-bin', component: () => import('@/views/WarehouseBinView.vue') },

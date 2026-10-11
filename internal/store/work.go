@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 
 	"private/construction_warehouse/internal/model"
@@ -101,56 +102,13 @@ func (s *Store) CreateWork(ctx context.Context, userID int64, in model.WorkInput
 	if len(in.Materials) > maxWorkMaterials {
 		return 0, model.Invalid("材料种类过多")
 	}
-	coverCount := 0
-	seenStaged := map[string]bool{}
-	for _, img := range in.Images {
-		if !s.images.IsUserTmp(userID, img.StagedImage) {
-			return 0, model.Invalid("图片无效，请重新上传")
-		}
-		if seenStaged[img.StagedImage] {
-			return 0, model.Invalid("图片重复")
-		}
-		seenStaged[img.StagedImage] = true
-		if img.IsCover {
-			coverCount++
-		}
-	}
-	if coverCount != 1 {
-		return 0, model.Invalid("请选择一张图片作为封面缩略图")
+	if err := validateWorkImagesCreate(userID, in.Images, s); err != nil {
+		return 0, err
 	}
 
-	type matRow struct {
-		itemID, whID             int64
-		whName, itemName, unit   string
-		qty, unitPrice, lineCost float64
-	}
-	mats := make([]matRow, 0, len(in.Materials))
-	seenItem := map[int64]bool{}
-	var materialCost float64
-	for _, m := range in.Materials {
-		if m.ItemID <= 0 || seenItem[m.ItemID] {
-			return 0, model.Invalid("材料选择无效或重复")
-		}
-		if m.Quantity <= 0 || m.Quantity > maxWorkQty {
-			return 0, model.Invalid("材料用量须大于 0")
-		}
-		seenItem[m.ItemID] = true
-		var whID int64
-		var whName, itemName, unit string
-		var avgPrice float64
-		err := s.db.QueryRowContext(ctx,
-			`SELECT i.name, i.unit, i.avg_price, w.id, w.name
-			 FROM item i
-			 JOIN category c ON c.id = i.category_id
-			 JOIN warehouse w ON w.id = c.warehouse_id
-			 WHERE i.id=? AND w.user_id=? AND i.deleted_at IS NULL AND w.deleted_at IS NULL`,
-			m.ItemID, userID).Scan(&itemName, &unit, &avgPrice, &whID, &whName)
-		if err != nil {
-			return 0, notFoundIfNoRows(err)
-		}
-		line := stockmath.Round2(m.Quantity * avgPrice)
-		materialCost = stockmath.Round2(materialCost + line)
-		mats = append(mats, matRow{m.ItemID, whID, whName, itemName, unit, m.Quantity, avgPrice, line})
+	mats, materialCost, err := s.resolveWorkMaterials(ctx, userID, in.Materials)
+	if err != nil {
+		return 0, err
 	}
 	unitCost := stockmath.Round2(materialCost / in.Quantity)
 	avgMinutes := in.Minutes / in.Quantity
@@ -159,7 +117,7 @@ func (s *Store) CreateWork(ctx context.Context, userID int64, in model.WorkInput
 	var workID int64
 	var coverRel string
 	committed := []string{}
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
+	err = s.inTx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx,
 			`INSERT INTO work(user_id, name, remark, quantity, total_minutes, avg_minutes,
 			                  material_cost, unit_material_cost, cover_image, created_at)
@@ -271,31 +229,243 @@ func (s *Store) DeleteWork(ctx context.Context, userID, workID int64) error {
 	return nil
 }
 
-// UpdateWorkMeta 更新作品名称与备注。
-// UpdateWorkMeta updates a work's name and remark.
-func (s *Store) UpdateWorkMeta(ctx context.Context, userID, workID int64, name, remark string) error {
-	name = strings.TrimSpace(name)
-	remark = strings.TrimSpace(remark)
+// UpdateWork 编辑作品名称、备注、图片与材料；按当前均价重锁材料成本；不改累计数量/用时。
+// UpdateWork edits name, remark, images and materials; re-locks cost from current averages; quantity/time unchanged.
+func (s *Store) UpdateWork(ctx context.Context, userID, workID int64, in model.WorkUpdateInput) error {
+	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		return model.Invalid("请输入作品名称")
 	}
 	if len(name) > 255 {
 		return model.Invalid("作品名称过长")
 	}
+	remark := strings.TrimSpace(in.Remark)
 	if len(remark) > 1000 {
 		return model.Invalid("备注过长")
 	}
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE work SET name=?, remark=? WHERE id=? AND user_id=? AND deleted_at IS NULL`,
-		name, remark, workID, userID)
+	if len(in.Images) == 0 {
+		return model.Invalid("请至少上传一张作品图片")
+	}
+	if len(in.Images) > maxWorkImages {
+		return model.Invalid(fmt.Sprintf("作品图片最多 %d 张", maxWorkImages))
+	}
+	if len(in.Materials) == 0 {
+		return model.Invalid("请至少选择一种材料")
+	}
+	if len(in.Materials) > maxWorkMaterials {
+		return model.Invalid("材料种类过多")
+	}
+
+	w, err := s.getWork(ctx, s.db, userID, workID, false)
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return model.ErrNotFound
+	oldImages, err := s.listWorkImages(ctx, s.db, workID)
+	if err != nil {
+		return err
+	}
+	oldPaths := map[string]bool{}
+	for _, img := range oldImages {
+		oldPaths[img.Path] = true
+	}
+	if err := validateWorkImagesUpdate(userID, workID, in.Images, oldPaths, s); err != nil {
+		return err
+	}
+
+	mats, materialCost, err := s.resolveWorkMaterials(ctx, userID, in.Materials)
+	if err != nil {
+		return err
+	}
+	// 单件成本仍按首批数量折算，与创建时一致；累计产出件数不因编辑材料而改。
+	// Per-piece cost uses the first batch qty (same as create); total produced qty is unchanged by material edits.
+	var firstQty float64
+	err = s.db.QueryRowContext(ctx,
+		`SELECT quantity FROM work_batch WHERE work_id=? ORDER BY created_at ASC, id ASC LIMIT 1`, workID).Scan(&firstQty)
+	if err != nil {
+		return notFoundIfNoRows(err)
+	}
+	if firstQty <= stockmath.Epsilon {
+		firstQty = w.Quantity
+	}
+	if firstQty <= stockmath.Epsilon {
+		return model.Invalid("作品数量无效，无法重算单件成本")
+	}
+	unitCost := stockmath.Round2(materialCost / firstQty)
+
+	var coverRel string
+	newCommitted := []string{}
+	keepPaths := map[string]bool{}
+	err = s.inTx(ctx, func(tx *sql.Tx) error {
+		if _, err := s.getWork(ctx, tx, userID, workID, true); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM work_image WHERE work_id=?`, workID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM work_material WHERE work_id=?`, workID); err != nil {
+			return err
+		}
+		for i, img := range in.Images {
+			var rel string
+			if img.Path != "" {
+				rel = img.Path
+				keepPaths[rel] = true
+			} else {
+				r, err := s.images.CommitWork(userID, workID, img.StagedImage)
+				if err != nil {
+					return err
+				}
+				rel = r
+				newCommitted = append(newCommitted, rel)
+				keepPaths[rel] = true
+			}
+			if img.IsCover {
+				coverRel = rel
+			}
+			isCover := 0
+			if img.IsCover {
+				isCover = 1
+			}
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO work_image(work_id, path, sort_order, is_cover) VALUES(?,?,?,?)`,
+				workID, rel, i, isCover); err != nil {
+				return err
+			}
+		}
+		for _, m := range mats {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO work_material(work_id, item_id, warehouse_id, warehouse_name, item_name, unit, quantity, unit_price, line_cost)
+				 VALUES(?,?,?,?,?,?,?,?,?)`,
+				workID, m.itemID, m.whID, m.whName, m.itemName, m.unit, m.qty, m.unitPrice, m.lineCost); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx,
+			`UPDATE work SET name=?, remark=?, material_cost=?, unit_material_cost=?, cover_image=?
+			 WHERE id=? AND user_id=? AND deleted_at IS NULL`,
+			name, remark, materialCost, unitCost, coverRel, workID, userID)
+		return err
+	})
+	if err != nil {
+		for _, rel := range newCommitted {
+			s.images.Delete(rel)
+		}
+		return err
+	}
+	// 事务成功后清理未再引用的旧图片文件
+	// After commit, remove old image files that are no longer referenced.
+	for p := range oldPaths {
+		if !keepPaths[p] {
+			s.images.Delete(p)
+		}
 	}
 	return nil
+}
+
+type workMatRow struct {
+	itemID, whID           int64
+	whName, itemName, unit string
+	qty, unitPrice, lineCost float64
+}
+
+func validateWorkImagesCreate(userID int64, images []model.WorkImageInput, s *Store) error {
+	coverCount := 0
+	seen := map[string]bool{}
+	for _, img := range images {
+		if strings.TrimSpace(img.Path) != "" {
+			return model.Invalid("图片无效，请重新上传")
+		}
+		if !s.images.IsUserTmp(userID, img.StagedImage) {
+			return model.Invalid("图片无效，请重新上传")
+		}
+		if seen[img.StagedImage] {
+			return model.Invalid("图片重复")
+		}
+		seen[img.StagedImage] = true
+		if img.IsCover {
+			coverCount++
+		}
+	}
+	if coverCount != 1 {
+		return model.Invalid("请选择一张图片作为封面缩略图")
+	}
+	return nil
+}
+
+func validateWorkImagesUpdate(userID, workID int64, images []model.WorkImageInput, oldPaths map[string]bool, s *Store) error {
+	coverCount := 0
+	seen := map[string]bool{}
+	for _, img := range images {
+		path := strings.TrimSpace(img.Path)
+		staged := strings.TrimSpace(img.StagedImage)
+		if (path == "") == (staged == "") {
+			return model.Invalid("图片无效，请重新上传")
+		}
+		key := path
+		if staged != "" {
+			key = staged
+			if !s.images.IsUserTmp(userID, staged) {
+				return model.Invalid("图片无效，请重新上传")
+			}
+		} else {
+			if !s.images.IsWorkFile(workID, path) || !oldPaths[path] {
+				return model.Invalid("图片无效，请重新上传")
+			}
+			abs, err := s.images.Abs(path)
+			if err != nil {
+				return model.Invalid("图片无效，请重新上传")
+			}
+			if _, err := os.Stat(abs); err != nil {
+				return model.Invalid("图片文件缺失，请重新上传")
+			}
+		}
+		if seen[key] {
+			return model.Invalid("图片重复")
+		}
+		seen[key] = true
+		if img.IsCover {
+			coverCount++
+		}
+	}
+	if coverCount != 1 {
+		return model.Invalid("请选择一张图片作为封面缩略图")
+	}
+	return nil
+}
+
+func (s *Store) resolveWorkMaterials(ctx context.Context, userID int64, materials []model.WorkMaterialInput) ([]workMatRow, float64, error) {
+	mats := make([]workMatRow, 0, len(materials))
+	seenItem := map[int64]bool{}
+	var materialCost float64
+	for _, m := range materials {
+		if m.ItemID <= 0 || seenItem[m.ItemID] {
+			return nil, 0, model.Invalid("材料选择无效或重复")
+		}
+		if m.Quantity <= 0 || m.Quantity > maxWorkQty {
+			return nil, 0, model.Invalid("材料用量须大于 0")
+		}
+		seenItem[m.ItemID] = true
+		var whID int64
+		var whName, itemName, unit string
+		var avgPrice float64
+		err := s.db.QueryRowContext(ctx,
+			`SELECT i.name, i.unit, i.avg_price, w.id, w.name
+			 FROM item i
+			 JOIN category c ON c.id = i.category_id
+			 JOIN warehouse w ON w.id = c.warehouse_id
+			 WHERE i.id=? AND w.user_id=? AND i.deleted_at IS NULL AND w.deleted_at IS NULL`,
+			m.ItemID, userID).Scan(&itemName, &unit, &avgPrice, &whID, &whName)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, 0, model.Invalid("所选材料已不存在或已被删除，请重新选择")
+			}
+			return nil, 0, notFoundIfNoRows(err)
+		}
+		line := stockmath.Round2(m.Quantity * avgPrice)
+		materialCost = stockmath.Round2(materialCost + line)
+		mats = append(mats, workMatRow{m.ItemID, whID, whName, itemName, unit, m.Quantity, avgPrice, line})
+	}
+	return mats, materialCost, nil
 }
 
 // ListMaterials 在指定仓库内列出可选材料，支持按名称关键字过滤。

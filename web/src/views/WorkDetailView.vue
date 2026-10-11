@@ -36,6 +36,7 @@ onMounted(() => {
 });
 
 const menu = computed<MenuItem[]>(() => [
+  { text: '编辑', onClick: () => router.push(`/works/${id}/edit`) },
   { text: '追加数量', onClick: () => { showAppend.value = true; } },
   {
     text: '删除', danger: true, onClick: async () => {
@@ -80,6 +81,7 @@ async function submitAppend(): Promise<boolean> {
 <template>
   <PageLayout :title="work?.name ?? '作品详情'" back="/works">
     <template #actions>
+      <van-icon name="edit" title="编辑" @click="router.push(`/works/${id}/edit`)" />
       <van-icon name="plus" title="追加数量" @click="showAppend = true" />
       <MoreMenu :items="menu" />
     </template>

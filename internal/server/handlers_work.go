@@ -49,15 +49,12 @@ func (s *Server) handleUpdateWork(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, err)
 		return
 	}
-	var req struct {
-		Name   string `json:"name"`
-		Remark string `json:"remark"`
-	}
-	if err := readJSON(w, r, &req); err != nil {
+	var in model.WorkUpdateInput
+	if err := readJSON(w, r, &in); err != nil {
 		fail(w, r, err)
 		return
 	}
-	if err := s.store.UpdateWorkMeta(r.Context(), uid(r), id, req.Name, req.Remark); err != nil {
+	if err := s.store.UpdateWork(r.Context(), uid(r), id, in); err != nil {
 		fail(w, r, err)
 		return
 	}
