@@ -1,0 +1,30 @@
+server:
+  addr: ":8080"
+  # 前后端分离：默认留空，只提供 /api 与 /files，前端由 nginx 托管（见 deploy/nginx.conf.example）
+  # 想单进程部署时可指向前端构建产物：web_dir: "./web/dist"
+  web_dir: ""
+  # 部署在 nginx 之后时改为 true，按 X-Real-IP 识别客户端（此时后端端口不要直接暴露到公网）
+  trust_proxy: false
+
+mysql:
+  # 需要先手动建库：CREATE DATABASE construction_warehouse DEFAULT CHARSET utf8mb4;
+  dsn: "root:@tcp(127.0.0.1:3306)/construction_warehouse?charset=utf8mb4&parseTime=true&loc=Local"
+  max_open_conns: 20
+  max_idle_conns: 5
+
+auth:
+  # access token 有效期，同时作为 cookie 过期时间（支持 30m / 12h / 168h 等）
+  token_ttl: "24h"
+  cookie_name: "cw_access_token"
+  # 仅在 HTTPS 部署时改为 true；通过 http:// 访问时开启会导致浏览器丢弃登录 cookie，表现为登录后又回到登录页
+  cookie_secure: false
+  allow_register: true
+  # 用户表为空时自动创建的初始账号，首次登录后请修改密码
+  init_admin:
+    username: "admin"
+    password: "admin123"
+
+storage:
+  upload_dir: "./data/uploads"
+  max_image_mb: 10
+  max_import_mb: 512
